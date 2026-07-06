@@ -6,6 +6,8 @@ public struct LiquidGlassTabItem: Identifiable {
     public let image: UIImage?
     public let selectedImage: UIImage?
 
+    private static let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
+
     public init(
         id: String,
         title: String,
@@ -16,14 +18,17 @@ public struct LiquidGlassTabItem: Identifiable {
     ) {
         self.id = id
         self.title = title
-        self.image = image ?? systemImage.flatMap { UIImage(systemName: $0) }
-        self.selectedImage = selectedImage ?? selectedSystemImage.flatMap { UIImage(systemName: $0) } ?? self.image
+        self.image = image ?? systemImage.flatMap { UIImage(systemName: $0, withConfiguration: Self.symbolConfiguration) }
+        self.selectedImage = selectedImage
+            ?? selectedSystemImage.flatMap { UIImage(systemName: $0, withConfiguration: Self.symbolConfiguration) }
+            ?? self.image
     }
 }
 
 public struct LiquidGlassTabBarStyle {
     public var backgroundTint: UIColor
     public var fallbackBlurStyle: UIBlurEffect.Style
+    public var fallbackDimmingColor: UIColor
     public var selectionColor: UIColor
     public var iconColor: UIColor
     public var shadowColor: UIColor
@@ -35,6 +40,7 @@ public struct LiquidGlassTabBarStyle {
     public init(
         backgroundTint: UIColor = UIColor.black.withAlphaComponent(0.18),
         fallbackBlurStyle: UIBlurEffect.Style = .systemUltraThinMaterialDark,
+        fallbackDimmingColor: UIColor = UIColor.black.withAlphaComponent(0.26),
         selectionColor: UIColor = UIColor(white: 0.39, alpha: 0.88),
         iconColor: UIColor = .white,
         shadowColor: UIColor = .black,
@@ -45,6 +51,7 @@ public struct LiquidGlassTabBarStyle {
     ) {
         self.backgroundTint = backgroundTint
         self.fallbackBlurStyle = fallbackBlurStyle
+        self.fallbackDimmingColor = fallbackDimmingColor
         self.selectionColor = selectionColor
         self.iconColor = iconColor
         self.shadowColor = shadowColor
@@ -203,8 +210,16 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         selectionView.backgroundColor = style.selectionColor
         buttons.forEach { $0.tintColor = style.iconColor }
 
-        blurView.effect = UIBlurEffect(style: style.fallbackBlurStyle)
-        dimmingView.backgroundColor = style.backgroundTint
+        if #available(iOS 26.0, *) {
+            let glassEffect = UIGlassEffect(style: .regular)
+            glassEffect.isInteractive = true
+            glassEffect.tintColor = style.backgroundTint
+            blurView.effect = glassEffect
+            dimmingView.backgroundColor = .clear
+        } else {
+            blurView.effect = UIBlurEffect(style: style.fallbackBlurStyle)
+            dimmingView.backgroundColor = style.fallbackDimmingColor
+        }
     }
 
     private func makeButton(for item: LiquidGlassTabItem, index: Int) -> UIButton {
@@ -269,7 +284,9 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         selectedIndex = index
         previewIndex = index
         updateButtonAppearance(animated: animated)
-        animateButtonTap(buttons[index])
+        if !alreadyInteracting {
+            animateButtonTap(buttons[index])
+        }
         onSelect?(index, items[index])
     }
 
