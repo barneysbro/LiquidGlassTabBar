@@ -23,6 +23,50 @@ public struct LiquidGlassTabItem: Identifiable {
             ?? selectedSystemImage.flatMap { UIImage(systemName: $0, withConfiguration: Self.symbolConfiguration) }
             ?? self.image
     }
+
+    public static func system(
+        id: String,
+        title: String,
+        symbol: String,
+        selectedSymbol: String? = nil
+    ) -> LiquidGlassTabItem {
+        LiquidGlassTabItem(
+            id: id,
+            title: title,
+            systemImage: symbol,
+            selectedSystemImage: selectedSymbol ?? symbol
+        )
+    }
+}
+
+public struct LiquidGlassTabBarLayout {
+    public var expandedHorizontalInset: CGFloat
+    public var compactHorizontalInset: CGFloat
+    public var expandedHeight: CGFloat
+    public var compactHeight: CGFloat
+    public var expandedBottomSpacing: CGFloat
+    public var compactBottomSpacing: CGFloat
+    public var maxWidth: CGFloat
+
+    public init(
+        expandedHorizontalInset: CGFloat = 22,
+        compactHorizontalInset: CGFloat = 50,
+        expandedHeight: CGFloat = 58,
+        compactHeight: CGFloat = 52,
+        expandedBottomSpacing: CGFloat = 30,
+        compactBottomSpacing: CGFloat? = nil,
+        maxWidth: CGFloat = 520
+    ) {
+        self.expandedHorizontalInset = expandedHorizontalInset
+        self.compactHorizontalInset = compactHorizontalInset
+        self.expandedHeight = expandedHeight
+        self.compactHeight = compactHeight
+        self.expandedBottomSpacing = expandedBottomSpacing
+        self.compactBottomSpacing = compactBottomSpacing ?? expandedBottomSpacing + expandedHeight - compactHeight
+        self.maxWidth = maxWidth
+    }
+
+    public static let `default` = LiquidGlassTabBarLayout()
 }
 
 public struct LiquidGlassTabBarStyle {
@@ -409,5 +453,19 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
     private func clampedIndex(_ index: Int) -> Int {
         guard !buttons.isEmpty else { return 0 }
         return min(max(index, 0), buttons.count - 1)
+    }
+}
+
+public extension UITabBarController {
+    func hideNativeTabBarForLiquidGlass() {
+        tabBar.layer.removeAllAnimations()
+        tabBar.alpha = 0
+        tabBar.layer.opacity = 0
+        tabBar.isHidden = true
+        tabBar.isUserInteractionEnabled = false
+        tabBar.subviews.forEach {
+            $0.alpha = 0
+            $0.isHidden = true
+        }
     }
 }

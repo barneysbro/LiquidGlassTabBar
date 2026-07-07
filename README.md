@@ -26,21 +26,23 @@ import LiquidGlassTabBar
 ## Quick start
 
 ```swift
+let layout = LiquidGlassTabBarLayout.default
 let tabBar = LiquidGlassTabBar()
 tabBar.translatesAutoresizingMaskIntoConstraints = false
 
 view.addSubview(tabBar)
 NSLayoutConstraint.activate([
-    tabBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 22),
-    tabBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -22),
-    tabBar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30),
-    tabBar.heightAnchor.constraint(equalToConstant: 58)
+    tabBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: layout.expandedHorizontalInset),
+    tabBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -layout.expandedHorizontalInset),
+    tabBar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -layout.expandedBottomSpacing),
+    tabBar.heightAnchor.constraint(equalToConstant: layout.expandedHeight),
+    tabBar.widthAnchor.constraint(lessThanOrEqualToConstant: layout.maxWidth)
 ])
 
 tabBar.configure(with: [
-    LiquidGlassTabItem(id: "home", title: "Home", systemImage: "house", selectedSystemImage: "house.fill"),
-    LiquidGlassTabItem(id: "search", title: "Search", systemImage: "magnifyingglass"),
-    LiquidGlassTabItem(id: "profile", title: "Profile", systemImage: "person", selectedSystemImage: "person.fill")
+    .system(id: "home", title: "Home", symbol: "house", selectedSymbol: "house.fill"),
+    .system(id: "search", title: "Search", symbol: "magnifyingglass"),
+    .system(id: "profile", title: "Profile", symbol: "person", selectedSymbol: "person.fill")
 ])
 
 tabBar.onSelect = { index, item in
@@ -69,15 +71,32 @@ tabBar.updateShapeForCurrentBounds()
 
 ## UITabBarController integration
 
-Hide the native tab bar, add `LiquidGlassTabBar` as an overlay, then sync selection:
+Hide the native tab bar, add `LiquidGlassTabBar` as an overlay, then sync selection. Call `hideNativeTabBarForLiquidGlass()` in layout callbacks so UIKit cannot put the native tab bar back on top.
 
 ```swift
-tabBar.onSelect = { [weak self] index, _ in
-    self?.selectedIndex = index
-}
+final class RootTabController: UITabBarController {
+    private let glassTabBar = LiquidGlassTabBar()
 
-override var selectedIndex: Int {
-    didSet { tabBar.setSelectedIndex(selectedIndex) }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        hideNativeTabBarForLiquidGlass()
+        view.addSubview(glassTabBar)
+        // Add constraints with LiquidGlassTabBarLayout.default.
+
+        glassTabBar.onSelect = { [weak self] index, _ in
+            self?.selectedIndex = index
+        }
+    }
+
+    override var selectedIndex: Int {
+        didSet { glassTabBar.setSelectedIndex(selectedIndex) }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        hideNativeTabBarForLiquidGlass()
+        view.bringSubviewToFront(glassTabBar)
+    }
 }
 ```
 
@@ -109,21 +128,23 @@ import LiquidGlassTabBar
 ## 快速開始
 
 ```swift
+let layout = LiquidGlassTabBarLayout.default
 let tabBar = LiquidGlassTabBar()
 tabBar.translatesAutoresizingMaskIntoConstraints = false
 
 view.addSubview(tabBar)
 NSLayoutConstraint.activate([
-    tabBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 22),
-    tabBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -22),
-    tabBar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30),
-    tabBar.heightAnchor.constraint(equalToConstant: 58)
+    tabBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: layout.expandedHorizontalInset),
+    tabBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -layout.expandedHorizontalInset),
+    tabBar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -layout.expandedBottomSpacing),
+    tabBar.heightAnchor.constraint(equalToConstant: layout.expandedHeight),
+    tabBar.widthAnchor.constraint(lessThanOrEqualToConstant: layout.maxWidth)
 ])
 
 tabBar.configure(with: [
-    LiquidGlassTabItem(id: "home", title: "首頁", systemImage: "house", selectedSystemImage: "house.fill"),
-    LiquidGlassTabItem(id: "search", title: "搜尋", systemImage: "magnifyingglass"),
-    LiquidGlassTabItem(id: "profile", title: "我的", systemImage: "person", selectedSystemImage: "person.fill")
+    .system(id: "home", title: "首頁", symbol: "house", selectedSymbol: "house.fill"),
+    .system(id: "search", title: "搜尋", symbol: "magnifyingglass"),
+    .system(id: "profile", title: "我的", symbol: "person", selectedSymbol: "person.fill")
 ])
 
 tabBar.onSelect = { index, item in
@@ -152,15 +173,32 @@ tabBar.updateShapeForCurrentBounds()
 
 ## 放進 UITabBarController
 
-把原生 tab bar 隱藏，然後把 `LiquidGlassTabBar` 加成 overlay，再同步 selected index：
+把原生 tab bar 隱藏，然後把 `LiquidGlassTabBar` 加成 overlay，再同步 selected index。要在 layout callbacks 再呼叫 `hideNativeTabBarForLiquidGlass()`，避免 UIKit 把原生 tab bar 蓋回來。
 
 ```swift
-tabBar.onSelect = { [weak self] index, _ in
-    self?.selectedIndex = index
-}
+final class RootTabController: UITabBarController {
+    private let glassTabBar = LiquidGlassTabBar()
 
-override var selectedIndex: Int {
-    didSet { tabBar.setSelectedIndex(selectedIndex) }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        hideNativeTabBarForLiquidGlass()
+        view.addSubview(glassTabBar)
+        // 用 LiquidGlassTabBarLayout.default 加 constraints。
+
+        glassTabBar.onSelect = { [weak self] index, _ in
+            self?.selectedIndex = index
+        }
+    }
+
+    override var selectedIndex: Int {
+        didSet { glassTabBar.setSelectedIndex(selectedIndex) }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        hideNativeTabBarForLiquidGlass()
+        view.bringSubviewToFront(glassTabBar)
+    }
 }
 ```
 
