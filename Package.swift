@@ -13,6 +13,10 @@ let package = Package(
         )
     ],
     targets: [
-        .target(name: "LiquidGlassTabBar", path: "Sources/LiquidGlassTabBar")
+        .target(name: "LiquidGlassTabBar", path: "Sources/LiquidGlassTabBar"),
+        .testTarget(
+            name: "LiquidGlassTabBarTests",
+            dependencies: ["LiquidGlassTabBar"]
+        )
     ]
 )

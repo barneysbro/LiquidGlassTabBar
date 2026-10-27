@@ -50,6 +50,10 @@ tabBar.onSelect = { index, item in
 }
 ```
 
+## Orientation
+
+Horizontal is the default. Set `tabBar.orientation = .vertical` to stack tab items top-to-bottom; tapping, dragging, and the selection pill follow the vertical axis. For a right-side layout, use the `verticalWidth`, `verticalTrailingSpacing`, `verticalTopInset`, `verticalBottomInset`, and `maxVerticalHeight` values from `LiquidGlassTabBarLayout` when constraining the view.
+
 ## Styling
 
 ```swift
@@ -151,6 +155,10 @@ tabBar.onSelect = { index, item in
     print("選中了", index, item.id)
 }
 ```
+
+## 方向設定
+
+預設維持橫向。設定 `tabBar.orientation = .vertical` 後，tab 會由上往下排列，點選、拖曳與選取膠囊也會沿垂直方向運作。右側欄位可使用 `LiquidGlassTabBarLayout` 的 `verticalWidth`、`verticalTrailingSpacing`、`verticalTopInset`、`verticalBottomInset` 與 `maxVerticalHeight` 配置。
 
 ## 自訂樣式
 

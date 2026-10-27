@@ -39,6 +39,11 @@ public struct LiquidGlassTabItem: Identifiable {
     }
 }
 
+public enum LiquidGlassTabBarOrientation {
+    case horizontal
+    case vertical
+}
+
 public struct LiquidGlassTabBarLayout {
     public var expandedHorizontalInset: CGFloat
     public var compactHorizontalInset: CGFloat
@@ -47,6 +52,12 @@ public struct LiquidGlassTabBarLayout {
     public var expandedBottomSpacing: CGFloat
     public var compactBottomSpacing: CGFloat
     public var maxWidth: CGFloat
+    public var verticalWidth: CGFloat
+    public var compactVerticalWidth: CGFloat
+    public var verticalTrailingSpacing: CGFloat
+    public var verticalTopInset: CGFloat
+    public var verticalBottomInset: CGFloat
+    public var maxVerticalHeight: CGFloat
 
     public init(
         expandedHorizontalInset: CGFloat = 22,
@@ -55,7 +66,13 @@ public struct LiquidGlassTabBarLayout {
         compactHeight: CGFloat = 52,
         expandedBottomSpacing: CGFloat = 30,
         compactBottomSpacing: CGFloat? = nil,
-        maxWidth: CGFloat = 520
+        maxWidth: CGFloat = 520,
+        verticalWidth: CGFloat = 70,
+        compactVerticalWidth: CGFloat = 58,
+        verticalTrailingSpacing: CGFloat = 16,
+        verticalTopInset: CGFloat = 112,
+        verticalBottomInset: CGFloat = 24,
+        maxVerticalHeight: CGFloat = 420
     ) {
         self.expandedHorizontalInset = expandedHorizontalInset
         self.compactHorizontalInset = compactHorizontalInset
@@ -64,6 +81,12 @@ public struct LiquidGlassTabBarLayout {
         self.expandedBottomSpacing = expandedBottomSpacing
         self.compactBottomSpacing = compactBottomSpacing ?? expandedBottomSpacing + expandedHeight - compactHeight
         self.maxWidth = maxWidth
+        self.verticalWidth = verticalWidth
+        self.compactVerticalWidth = compactVerticalWidth
+        self.verticalTrailingSpacing = verticalTrailingSpacing
+        self.verticalTopInset = verticalTopInset
+        self.verticalBottomInset = verticalBottomInset
+        self.maxVerticalHeight = maxVerticalHeight
     }
 
     public static let `default` = LiquidGlassTabBarLayout()
@@ -116,6 +139,18 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
     public private(set) var items: [LiquidGlassTabItem] = []
     public private(set) var selectedIndex = 0
     public var style: LiquidGlassTabBarStyle { didSet { applyStyle() } }
+    public var orientation: LiquidGlassTabBarOrientation = .horizontal {
+        didSet {
+            guard oldValue != orientation else { return }
+            isDraggingSelection = false
+            draggedSelectionCenter = nil
+            resetEdgeStretch()
+            applyOrientation()
+            setNeedsLayout()
+            layoutIfNeeded()
+            updateButtonAppearance(animated: false)
+        }
+    }
 
     private let blurView = UIVisualEffectView()
     private let dimmingView = UIView()
@@ -123,11 +158,13 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
     private let buttonStack = UIStackView()
     private var buttonStackLeadingConstraint: NSLayoutConstraint?
     private var buttonStackTrailingConstraint: NSLayoutConstraint?
+    private var buttonStackTopConstraint: NSLayoutConstraint?
+    private var buttonStackBottomConstraint: NSLayoutConstraint?
     private var buttons: [UIButton] = []
     private var previewIndex = 0
     private var isCompact = false
     private var isDraggingSelection = false
-    private var draggedSelectionCenterX: CGFloat?
+    private var draggedSelectionCenter: CGFloat?
 
     private lazy var tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
     private lazy var panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
@@ -189,7 +226,7 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
     }
 
     public func updateShapeForCurrentBounds() {
-        let cornerRadius = bounds.height / 2
+        let cornerRadius = (orientation == .horizontal ? bounds.height : bounds.width) / 2
         layer.cornerRadius = cornerRadius
         blurView.layer.cornerRadius = cornerRadius
         layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius).cgPath
@@ -205,7 +242,7 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         selectionView.isUserInteractionEnabled = false
         selectionView.layer.cornerCurve = .continuous
 
-        buttonStack.axis = .horizontal
+        buttonStack.axis = orientation == .horizontal ? .horizontal : .vertical
         buttonStack.alignment = .fill
         buttonStack.distribution = .fillEqually
 
@@ -220,6 +257,8 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
 
         buttonStackLeadingConstraint = buttonStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: style.buttonInset)
         buttonStackTrailingConstraint = buttonStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -style.buttonInset)
+        buttonStackTopConstraint = buttonStack.topAnchor.constraint(equalTo: topAnchor)
+        buttonStackBottomConstraint = buttonStack.bottomAnchor.constraint(equalTo: bottomAnchor)
 
         NSLayoutConstraint.activate([
             blurView.topAnchor.constraint(equalTo: topAnchor),
@@ -230,10 +269,10 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
             dimmingView.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor),
             dimmingView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor),
             dimmingView.bottomAnchor.constraint(equalTo: blurView.contentView.bottomAnchor),
-            buttonStack.topAnchor.constraint(equalTo: topAnchor),
+            buttonStackTopConstraint!,
             buttonStackLeadingConstraint!,
             buttonStackTrailingConstraint!,
-            buttonStack.bottomAnchor.constraint(equalTo: bottomAnchor)
+            buttonStackBottomConstraint!
         ])
 
         tapGesture.require(toFail: panGesture)
@@ -245,8 +284,7 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private func applyStyle() {
-        buttonStackLeadingConstraint?.constant = style.buttonInset
-        buttonStackTrailingConstraint?.constant = -style.buttonInset
+        applyOrientation()
         layer.shadowColor = style.shadowColor.cgColor
         layer.shadowOpacity = style.shadowOpacity
         layer.shadowRadius = style.shadowRadius
@@ -266,11 +304,21 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         }
     }
 
+    private func applyOrientation() {
+        let isHorizontal = orientation == .horizontal
+        buttonStack.axis = isHorizontal ? .horizontal : .vertical
+        buttonStackLeadingConstraint?.constant = isHorizontal ? style.buttonInset : 0
+        buttonStackTrailingConstraint?.constant = isHorizontal ? -style.buttonInset : 0
+        buttonStackTopConstraint?.constant = isHorizontal ? 0 : style.buttonInset
+        buttonStackBottomConstraint?.constant = isHorizontal ? 0 : -style.buttonInset
+    }
+
     private func makeButton(for item: LiquidGlassTabItem, index: Int) -> UIButton {
         let button = UIButton(type: .custom)
         button.tag = index
         button.tintColor = style.iconColor
         button.accessibilityLabel = item.title
+        button.accessibilityIdentifier = "liquidGlassTabBar.\(item.id)"
         button.accessibilityTraits = .button
         button.imageView?.contentMode = .scaleAspectFit
         button.setImage(item.image, for: .normal)
@@ -279,7 +327,9 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         return button
     }
 
-    @objc private func handleTap(_ gesture: UITapGestureRecognizer) { select(nearestIndex(to: gesture.location(in: self).x), animated: true) }
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+        select(nearestIndex(to: mainAxisLocation(of: gesture.location(in: self))), animated: true)
+    }
 
     @objc private func handleButtonTap(_ sender: UIButton) { select(sender.tag, animated: true) }
 
@@ -289,32 +339,32 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
         guard !buttons.isEmpty else { return }
-        let locationX = gesture.location(in: self).x
+        let location = mainAxisLocation(of: gesture.location(in: self))
 
         switch gesture.state {
         case .began:
             isDraggingSelection = true
             beginInteraction()
-            previewIndex = nearestIndex(to: locationX)
+            previewIndex = nearestIndex(to: location)
             updatePreviewAppearance()
-            updateDraggedSelection(at: locationX)
+            updateDraggedSelection(at: location)
         case .changed:
-            let newPreviewIndex = nearestIndex(to: locationX)
+            let newPreviewIndex = nearestIndex(to: location)
             if newPreviewIndex != previewIndex {
                 previewIndex = newPreviewIndex
                 updatePreviewAppearance()
                 UISelectionFeedbackGenerator().selectionChanged()
             }
-            updateDraggedSelection(at: locationX)
+            updateDraggedSelection(at: location)
         case .ended:
             resetEdgeStretch()
             isDraggingSelection = false
-            draggedSelectionCenterX = nil
-            select(nearestIndex(to: locationX), animated: true, alreadyInteracting: true)
+            draggedSelectionCenter = nil
+            select(nearestIndex(to: location), animated: true, alreadyInteracting: true)
         case .cancelled, .failed:
             resetEdgeStretch()
             isDraggingSelection = false
-            draggedSelectionCenterX = nil
+            draggedSelectionCenter = nil
             previewIndex = selectedIndex
             updateButtonAppearance(animated: true)
         default:
@@ -339,31 +389,41 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         setCompact(false, animated: true)
     }
 
-    private func nearestIndex(to locationX: CGFloat) -> Int {
+    private var isHorizontal: Bool { orientation == .horizontal }
+
+    private func mainAxisLocation(of point: CGPoint) -> CGFloat {
+        isHorizontal ? point.x : point.y
+    }
+
+    private func nearestIndex(to location: CGFloat) -> Int {
         guard !buttons.isEmpty else { return selectedIndex }
-        let firstCenter = centerX(for: 0)
-        let lastCenter = centerX(for: buttons.count - 1)
-        let buttonWidth = max((lastCenter - firstCenter) / CGFloat(max(buttons.count - 1, 1)), 1)
-        let minX = firstCenter - buttonWidth / 2
-        let maxX = lastCenter + buttonWidth / 2
-        if locationX <= minX { return 0 }
-        if locationX >= maxX { return buttons.count - 1 }
-        let normalizedPosition = (locationX - minX) / max(maxX - minX, 1)
+        let firstCenter = center(for: 0)
+        let lastCenter = center(for: buttons.count - 1)
+        let itemLength = max((mainAxisLength - style.buttonInset * 2) / CGFloat(buttons.count), 1)
+        let minimum = firstCenter - itemLength / 2
+        let maximum = lastCenter + itemLength / 2
+        if location <= minimum { return 0 }
+        if location >= maximum { return buttons.count - 1 }
+        let normalizedPosition = (location - minimum) / max(maximum - minimum, 1)
         return min(max(Int(normalizedPosition * CGFloat(buttons.count)), 0), buttons.count - 1)
     }
 
-    private func centerX(for index: Int) -> CGFloat {
-        let itemWidth = max((bounds.width - style.buttonInset * 2) / CGFloat(max(buttons.count, 1)), 1)
-        return style.buttonInset + itemWidth * (CGFloat(index) + 0.5)
+    private var mainAxisLength: CGFloat {
+        isHorizontal ? bounds.width : bounds.height
     }
 
-    private func updateDraggedSelection(at locationX: CGFloat) {
-        let firstCenter = centerX(for: 0)
-        let lastCenter = centerX(for: buttons.count - 1)
-        let clampedX = min(max(locationX, firstCenter), lastCenter)
-        let overshoot = locationX - clampedX
-        draggedSelectionCenterX = clampedX + rubberBandDistance(overshoot)
-        positionSelectionView(centerX: draggedSelectionCenterX!)
+    private func center(for index: Int) -> CGFloat {
+        let itemLength = max((mainAxisLength - style.buttonInset * 2) / CGFloat(max(buttons.count, 1)), 1)
+        return style.buttonInset + itemLength * (CGFloat(index) + 0.5)
+    }
+
+    private func updateDraggedSelection(at location: CGFloat) {
+        let firstCenter = center(for: 0)
+        let lastCenter = center(for: buttons.count - 1)
+        let clampedLocation = min(max(location, firstCenter), lastCenter)
+        let overshoot = location - clampedLocation
+        draggedSelectionCenter = clampedLocation + rubberBandDistance(overshoot)
+        positionSelectionView(center: draggedSelectionCenter!)
         applyEdgeStretch(overshoot: overshoot)
     }
 
@@ -377,8 +437,10 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
         guard abs(overshoot) > 0.5 else { resetEdgeStretch(); return }
         let stretch = min(abs(rubberBandDistance(overshoot)), 12)
         let direction: CGFloat = overshoot < 0 ? -1 : 1
-        let scaleX = 1 + (stretch / max(bounds.width, 1))
-        blurView.transform = CGAffineTransform(translationX: direction * stretch / 2, y: 0).scaledBy(x: scaleX, y: 1)
+        let scale = 1 + (stretch / max(mainAxisLength, 1))
+        blurView.transform = isHorizontal
+            ? CGAffineTransform(translationX: direction * stretch / 2, y: 0).scaledBy(x: scale, y: 1)
+            : CGAffineTransform(translationX: 0, y: direction * stretch / 2).scaledBy(x: 1, y: scale)
     }
 
     private func resetEdgeStretch() {
@@ -432,22 +494,38 @@ public final class LiquidGlassTabBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private func layoutSelectionView() {
-        if isDraggingSelection, let draggedSelectionCenterX {
-            positionSelectionView(centerX: draggedSelectionCenterX)
+        if isDraggingSelection, let draggedSelectionCenter {
+            positionSelectionView(center: draggedSelectionCenter)
             return
         }
         guard buttons.indices.contains(selectedIndex) else { return }
-        positionSelectionView(centerX: centerX(for: selectedIndex))
+        positionSelectionView(center: center(for: selectedIndex))
     }
 
-    private func positionSelectionView(centerX: CGFloat) {
-        let selectionHeight = max(bounds.height - 10, 1)
-        let itemWidth = max((bounds.width - style.buttonInset * 2) / CGFloat(max(buttons.count, 1)), 1)
-        let selectionWidth = max(itemWidth + 8, selectionHeight)
-        let minX: CGFloat = 2
-        let maxX = max(bounds.width - selectionWidth - minX, minX)
-        selectionView.frame = CGRect(x: min(max(centerX - selectionWidth / 2, minX), maxX), y: bounds.midY - selectionHeight / 2, width: selectionWidth, height: selectionHeight)
-        selectionView.layer.cornerRadius = selectionHeight / 2
+    private func positionSelectionView(center: CGFloat) {
+        let crossAxisLength = max((isHorizontal ? bounds.height : bounds.width) - 10, 1)
+        let itemLength = max((mainAxisLength - style.buttonInset * 2) / CGFloat(max(buttons.count, 1)), 1)
+        let selectionMainLength = max(itemLength + 8, crossAxisLength)
+        let minimumCenter = 2 + selectionMainLength / 2
+        let maximumCenter = max(mainAxisLength - minimumCenter, minimumCenter)
+        let clampedCenter = min(max(center, minimumCenter), maximumCenter)
+
+        if isHorizontal {
+            selectionView.frame = CGRect(
+                x: clampedCenter - selectionMainLength / 2,
+                y: bounds.midY - crossAxisLength / 2,
+                width: selectionMainLength,
+                height: crossAxisLength
+            )
+        } else {
+            selectionView.frame = CGRect(
+                x: bounds.midX - crossAxisLength / 2,
+                y: clampedCenter - selectionMainLength / 2,
+                width: crossAxisLength,
+                height: selectionMainLength
+            )
+        }
+        selectionView.layer.cornerRadius = crossAxisLength / 2
     }
 
     private func clampedIndex(_ index: Int) -> Int {
